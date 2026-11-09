@@ -1,0 +1,4 @@
+# The screenshots in golden_test.dart differ by a pixel here and there between Linux and Windows, so CI runs
+# `flutter test --exclude-tags golden` and they are checked on the machine that drew them.
+tags:
+  golden:

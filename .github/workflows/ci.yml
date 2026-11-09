@@ -1,0 +1,51 @@
+name: CI
+
+# Noctorium Song Find for Android: the lints, the tests, and a debug APK to try, on every push and pull request.
+# Releases are not built here: Noctorium-Installer's release workflow builds this repository at the release
+# tag, signed, beside everything else Noctorium publishes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Lints, tests and a debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # The Android Gradle plugin needs Java 17 or newer; 21 is what the rest of Noctorium builds with.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      # The Flutter this was made with, named rather than "whatever stable is today", so a new release of
+      # Flutter with new lints cannot turn a green commit red by itself.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - run: flutter pub get
+      - name: Lints
+        run: flutter analyze
+      # The screenshots in test/goldens are left out: drawn on Windows, they differ from Linux's in the last
+      # pixel of every letter. Everything else -- parsing, formatting, requests, errors, the screens and how
+      # they behave at the largest text size -- runs here.
+      - name: Tests
+        run: flutter test --exclude-tags golden
+      - name: Build a debug APK
+        run: flutter build apk --debug
+      # Kept from every run, so there is always a current build to try without cutting a release.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: noctorium-song-find-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

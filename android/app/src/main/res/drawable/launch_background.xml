@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the window shows before Flutter has drawn anything: Night's page colour, so the way in is black into
+  black rather than a white flash. Android 12 and later put the launcher icon over it by themselves.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@android:color/black" />
+</layer-list>

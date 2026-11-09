@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The Flutter tool needs it to talk to a running debug build: breakpoints, hot reload. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

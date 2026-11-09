@@ -1,0 +1,29 @@
+name: noctorium_song_find
+description: Which song is playing -- from the microphone or from what the phone itself plays.
+publish_to: none
+
+# What a build nobody gave a version to calls itself. A release passes --build-name and --build-number
+# from its tag (0.27.0 and 2700: major * 10000 + minor * 100 + patch, as Noctorium's own APK is numbered),
+# and both override this.
+version: 0.27.0+2700
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.6.0                     # the providers and GitHub
+  crypto: ^3.0.6                   # ACRCloud's signature, and checking a downloaded update
+  shared_preferences: ^2.5.6       # the settings and the history, on this phone only
+  url_launcher: ^6.3.3             # the song on Spotify, YouTube Music and the rest, and the release page
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/noctorium.png
