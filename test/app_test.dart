@@ -46,6 +46,33 @@ void main() {
     expect(f.history, isEmpty);
   });
 
+  test('a search that ends out of sight says so in a notification, and only then', () async {
+    final phone = FakePhone();
+    final f = await songFinder(phone: phone);
+    await f.listen();
+    expect(phone.told, isEmpty, reason: 'on screen, the Listen page says it');
+
+    f.away = true;
+    await f.listen();
+    expect(phone.told.single.$1, 'Never Gonna Give You Up');
+    expect(phone.told.single.$2, contains('Rick Astley'));
+
+    f.change(f.settings.copyWith(notifyWhenDone: false));
+    await f.listen();
+    expect(phone.told, hasLength(1), reason: 'switched off in Settings');
+  });
+
+  test('a new search does not leave the last song beside its problem', () async {
+    final phone = FakePhone();
+    final f = await songFinder(phone: phone);
+    await f.listen();
+    expect(f.shown, isNotNull);
+    phone.error = 'The sound could not be opened.';
+    await f.listen();
+    expect(f.problem, 'The sound could not be opened.');
+    expect(f.shown, isNull);
+  });
+
   testWidgets('a microphone that may not be used says why', (tester) async {
     final f = await songFinder(phone: FakePhone(error: 'Song Find may not use the microphone.'));
     await tester.pumpWidget(SongFindApp(finder: f));

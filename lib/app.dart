@@ -39,8 +39,27 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with WidgetsBindingObserver {
   var _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Android's own "allow sharing" question also takes the screen for a moment, but only as far as
+    // inactive; paused or hidden is another app in front, or the screen off.
+    widget.finder.away = state == AppLifecycleState.paused || state == AppLifecycleState.hidden;
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -607,6 +626,13 @@ class SettingsPage extends StatelessWidget {
           Text(
             'Longer is surer in a noisy room; ten seconds is plenty for most songs.',
             style: TextStyle(color: Night.faint, fontSize: 12),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Tell me when the song is found'),
+            subtitle: const Text('A notification, if Song Find is not on screen when the search ends'),
+            value: s.notifyWhenDone,
+            onChanged: (v) => finder.change(s.copyWith(notifyWhenDone: v)),
           ),
         ]),
         _section('Providers', [

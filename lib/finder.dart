@@ -41,6 +41,9 @@ class SongFinder extends ChangeNotifier {
   String? problem;
   bool systemAudioSupported = true;
 
+  /// Whether Song Find is out of sight: another app in front, or the screen off. The screens keep this told.
+  bool away = false;
+
   Release? newer;
   Updating updating = Updating.nothing;
   double downloaded = 0;
@@ -77,6 +80,7 @@ class SongFinder extends ChangeNotifier {
     level = 0;
     fraction = 0;
     answers = [];
+    shown = null;
     problem = null;
     notifyListeners();
     final source = settings.source;
@@ -101,6 +105,23 @@ class SongFinder extends ChangeNotifier {
       activity = Activity.idle;
       asking = null;
       notifyListeners();
+      await _tellIfAway();
+    }
+  }
+
+  /// When the search ends out of sight -- the song playing in another app, say -- a notification says how it
+  /// went, and tapping it comes back here.
+  Future<void> _tellIfAway() async {
+    if (!away || !settings.notifyWhenDone) return;
+    final song = shown;
+    try {
+      if (song != null && problem == null) {
+        await phone.notify(song.title, '${song.artist} · found by ${song.provider}', cover: song.cover);
+      } else {
+        await phone.notify('No song found', (problem ?? 'Nobody knew it.').split('\n').first);
+      }
+    } catch (_) {
+      // A notification that could not be shown is no reason to lose the song; it is on the Listen page.
     }
   }
 

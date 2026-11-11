@@ -16,6 +16,10 @@ abstract class Phone {
 
   /// Null when Android's installer opened; why not, otherwise.
   Future<String?> install(String path);
+
+  /// A notification saying how a search went, which opens Song Find when tapped; [cover] is a picture's
+  /// address to show with it.
+  Future<void> notify(String title, String body, {String? cover});
 }
 
 class AndroidPhone implements Phone {
@@ -58,6 +62,10 @@ class AndroidPhone implements Phone {
 
   @override
   Future<String?> install(String path) => _channel.invokeMethod<String>('install', {'path': path});
+
+  @override
+  Future<void> notify(String title, String body, {String? cover}) =>
+      _channel.invokeMethod('notify', {'title': title, 'body': body, 'cover': cover});
 }
 
 class ListenError implements Exception {

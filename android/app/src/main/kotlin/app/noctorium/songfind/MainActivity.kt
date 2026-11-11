@@ -2,9 +2,15 @@ package app.noctorium.songfind
 
 import android.Manifest
 import android.app.Activity
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.projection.MediaProjectionConfig
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
@@ -28,6 +34,7 @@ import java.io.File
  * - `updatesFolder` -> where an update is downloaded to, the one folder the installer can be shown.
  * - `install` {path} hands a downloaded APK to Android's own installer.
  * - `systemAudioSupported` -> whether this Android can record what it plays (10 and later).
+ * - `notify` {title, body, cover?} says how a search went, in a notification that opens Song Find.
  */
 class MainActivity : FlutterActivity() {
 
@@ -36,7 +43,6 @@ class MainActivity : FlutterActivity() {
 
     private var pendingRecord: (() -> Unit)? = null
     private var pendingResult: MethodChannel.Result? = null
-    private var recorder: Recorder? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -59,27 +65,46 @@ class MainActivity : FlutterActivity() {
                 }
             }
             "stop" -> {
-                recorder?.stop()
                 CaptureService.stop()
                 result.success(null)
             }
             "updatesFolder" -> result.success(File(filesDir, "updates").apply { mkdirs() }.absolutePath)
             "install" -> result.success(install(call.argument<String>("path") ?: ""))
             "systemAudioSupported" -> result.success(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            "notify" -> {
+                notifyFound(call.argument<String>("title") ?: "", call.argument<String>("body") ?: "", call.argument<String>("cover"))
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
 
     // ---------------------------------------------------------------------------------------- listening
 
-    /** Asks for the microphone first if it has not been allowed: both kinds of listening need it. */
+    /**
+     * Asks for the microphone first if it has not been allowed: both kinds of listening need it. Android 13
+     * and later also want notifications allowed, for the countdown and for "found it" -- asked once, with
+     * the microphone, and listening goes ahead whatever the answer to that.
+     */
     private fun withMicrophone(then: () -> Unit) {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+        val wanted = mutableListOf<String>()
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            wanted += Manifest.permission.RECORD_AUDIO
+        }
+        val prefs = getSharedPreferences("android", MODE_PRIVATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            !prefs.getBoolean("asked_notifications", false)
+        ) {
+            wanted += Manifest.permission.POST_NOTIFICATIONS
+            prefs.edit().putBoolean("asked_notifications", true).apply()
+        }
+        if (wanted.isEmpty()) {
             then()
             return
         }
         pendingRecord = then
-        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
+        requestPermissions(wanted.toTypedArray(), REQUEST_MICROPHONE)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -87,23 +112,20 @@ class MainActivity : FlutterActivity() {
         if (requestCode != REQUEST_MICROPHONE) return
         val then = pendingRecord
         pendingRecord = null
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && then != null) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED && then != null) {
             then()
         } else {
             fail("microphone", "Song Find may not use the microphone. Allow it in the phone's settings for this app, then try again.")
         }
     }
 
+    /** In the foreground service, so the microphone is still heard once another app is in front. */
     private fun recordMicrophone(seconds: Int) {
-        val recorder = Recorder(seconds, ::progress)
-        this.recorder = recorder
-        Thread {
-            val outcome = runCatching { recorder.recordMicrophone() }
+        CaptureService.startMicrophone(this, seconds, ::progress) { outcome ->
             main.post {
-                this.recorder = null
                 outcome.fold(::succeed) { fail("record", it.message ?: "The microphone could not be recorded.") }
             }
-        }.start()
+        }
     }
 
     private fun askToCapture(seconds: Int) {
@@ -135,7 +157,7 @@ class MainActivity : FlutterActivity() {
             fail("declined", "Android was not allowed to share what the phone is playing, so nothing was heard.")
             return
         }
-        CaptureService.start(this, resultCode, data, pendingSeconds, ::progress) { outcome ->
+        CaptureService.startPlayback(this, resultCode, data, pendingSeconds, ::progress) { outcome ->
             main.post {
                 outcome.fold(::succeed) { fail("record", it.message ?: "What the phone is playing could not be recorded.") }
             }
@@ -155,6 +177,47 @@ class MainActivity : FlutterActivity() {
         pendingResult?.error(code, message, null)
         pendingResult = null
     }
+
+    // ------------------------------------------------------------------------------------- found it
+
+    /** How a search went, with the cover where there is one; tapping it brings Song Find back. */
+    private fun notifyFound(title: String, body: String, cover: String?) {
+        Thread {
+            val picture = cover?.takeIf { it.startsWith("https://") }?.let(::fetchPicture)
+            main.post {
+                val notifications = getSystemService(NotificationManager::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    notifications.createNotificationChannel(
+                        NotificationChannel(FOUND_CHANNEL, "Song found", NotificationManager.IMPORTANCE_HIGH).apply {
+                            description = "When a search ends while Song Find is not on screen."
+                        },
+                    )
+                }
+                val open = PendingIntent.getActivity(
+                    this,
+                    1,
+                    Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                val builder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, FOUND_CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(this))
+                    .setContentTitle(title)
+                    .setContentText(body)
+                    .setSmallIcon(android.R.drawable.ic_media_play)
+                    .setContentIntent(open)
+                    .setAutoCancel(true)
+                if (picture != null) builder.setLargeIcon(picture)
+                runCatching { notifications.notify(FOUND_NOTIFICATION, builder.build()) }
+            }
+        }.start()
+    }
+
+    private fun fetchPicture(url: String): Bitmap? = runCatching {
+        val connection = java.net.URL(url).openConnection().apply {
+            connectTimeout = 5000
+            readTimeout = 5000
+        }
+        connection.getInputStream().use { BitmapFactory.decodeStream(it) }
+    }.getOrNull()
 
     // ------------------------------------------------------------------------------------------ updates
 
@@ -187,5 +250,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val REQUEST_MICROPHONE = 4101
         private const val REQUEST_CAPTURE = 4102
+        private const val FOUND_CHANNEL = "found"
+        private const val FOUND_NOTIFICATION = 28
     }
 }

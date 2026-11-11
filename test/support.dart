@@ -47,6 +47,11 @@ class FakePhone implements Phone {
   @override
   Future<String> updatesFolder() async => '/nowhere';
 
+  final told = <(String, String)>[];
+
+  @override
+  Future<void> notify(String title, String body, {String? cover}) async => told.add((title, body));
+
   @override
   Future<String?> install(String path) async {
     installed = path;

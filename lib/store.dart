@@ -19,6 +19,7 @@ class Settings {
     this.keepHistory = true,
     this.keys = const Keys(),
     this.checkForUpdates = true,
+    this.notifyWhenDone = true,
   }) : providers = tidy(providers ?? [for (final p in Provider.values) (p, true)]);
 
   final Source source;
@@ -28,6 +29,9 @@ class Settings {
   final bool keepHistory;
   final Keys keys;
   final bool checkForUpdates;
+
+  /// A notification when a search ends while Song Find is not on screen.
+  final bool notifyWhenDone;
 
   static const lengths = [5, 8, 10, 15];
 
@@ -57,6 +61,7 @@ class Settings {
     bool? keepHistory,
     Keys? keys,
     bool? checkForUpdates,
+    bool? notifyWhenDone,
   }) => Settings(
     source: source ?? this.source,
     seconds: seconds ?? this.seconds,
@@ -65,6 +70,7 @@ class Settings {
     keepHistory: keepHistory ?? this.keepHistory,
     keys: keys ?? this.keys,
     checkForUpdates: checkForUpdates ?? this.checkForUpdates,
+    notifyWhenDone: notifyWhenDone ?? this.notifyWhenDone,
   );
 
   Map<String, dynamic> toJson() => {
@@ -80,6 +86,7 @@ class Settings {
     'acrcloud_key': keys.acrKey,
     'acrcloud_secret': keys.acrSecret,
     'check_for_updates': checkForUpdates,
+    'notify_when_done': notifyWhenDone,
   };
 
   static Settings fromJson(Map<String, dynamic> json) {
@@ -103,6 +110,7 @@ class Settings {
         acrSecret: json['acrcloud_secret'] as String? ?? '',
       ),
       checkForUpdates: json['check_for_updates'] != false,
+      notifyWhenDone: json['notify_when_done'] != false,
     );
   }
 }
