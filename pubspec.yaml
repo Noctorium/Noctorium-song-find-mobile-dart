@@ -5,7 +5,7 @@ publish_to: none
 # What a build nobody gave a version to calls itself. A release passes --build-name and --build-number
 # from its tag (0.27.0 and 2700: major * 10000 + minor * 100 + patch, as Noctorium's own APK is numbered),
 # and both override this.
-version: 0.28.0+2800
+version: 0.29.0+2900
 
 environment:
   sdk: ^3.13.5
