@@ -101,7 +101,7 @@ class CaptureService : Service() {
         // otherwise, which is about as long as the whole countdown.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
         return builder
-            .setContentTitle(if (playback) "Listening to what's playing" else "Listening to the room")
+            .setContentTitle(if (playback) "Listening to what's playing · ${seconds}s" else "Listening to the room · ${seconds}s")
             .setContentText(if (fraction >= 1f) "Asking who knows the song…" else "${left}s left")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setProgress(100, (fraction * 100).toInt(), false)
@@ -114,9 +114,15 @@ class CaptureService : Service() {
     private fun goForeground(playback: Boolean, seconds: Int) {
         val notifications = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // The quiet channel the countdown used to have, left over from an earlier version.
+            runCatching { notifications.deleteNotificationChannel("listening") }
             notifications.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Listening", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Shown while Song Find listens, counting down."
+                // Default, silent: in the status bar while it counts down, where the quiet "low" kept it out of sight.
+                NotificationChannel(CHANNEL, "Listening", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "Shown while Song Find listens, counting down the seconds."
+                    setSound(null, null)
+                    enableVibration(false)
+                    setShowBadge(false)
                 },
             )
         }
@@ -152,7 +158,8 @@ class CaptureService : Service() {
     )
 
     companion object {
-        private const val CHANNEL = "listening"
+        /** "countdown", not the old "listening": a channel's importance is fixed once it exists. */
+        private const val CHANNEL = "countdown"
         private const val NOTIFICATION = 27
 
         @Volatile

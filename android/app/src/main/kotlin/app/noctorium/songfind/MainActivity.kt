@@ -75,6 +75,20 @@ class MainActivity : FlutterActivity() {
                 notifyFound(call.argument<String>("title") ?: "", call.argument<String>("body") ?: "", call.argument<String>("cover"))
                 result.success(null)
             }
+            "searching" -> {
+                notifySearching(call.argument<String>("provider") ?: "", call.argument<Int>("seconds") ?: 0)
+                result.success(null)
+            }
+            "notificationsAllowed" -> result.success(getSystemService(NotificationManager::class.java).areNotificationsEnabled())
+            "openNotificationSettings" -> {
+                runCatching {
+                    startActivity(
+                        Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName),
+                    )
+                }
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -91,13 +105,13 @@ class MainActivity : FlutterActivity() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             wanted += Manifest.permission.RECORD_AUDIO
         }
-        val prefs = getSharedPreferences("android", MODE_PRIVATE)
+        // Asked each time they are not allowed, not once ever: a single "Don't allow" -- or a phone that asked
+        // before this was a question -- left the countdown and "found it" silent for good. Android itself stops
+        // showing the question after it has been refused twice, and Settings says how to allow them then.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
-            !prefs.getBoolean("asked_notifications", false)
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             wanted += Manifest.permission.POST_NOTIFICATIONS
-            prefs.edit().putBoolean("asked_notifications", true).apply()
         }
         if (wanted.isEmpty()) {
             then()
@@ -180,19 +194,54 @@ class MainActivity : FlutterActivity() {
 
     // ------------------------------------------------------------------------------------- found it
 
+    /**
+     * While the providers are asked, after the listening: which one, and for how many seconds the search has gone
+     * on. The same notification becomes the answer when it comes, by [notifyFound].
+     */
+    private fun notifySearching(provider: String, seconds: Int) {
+        val notifications = getSystemService(NotificationManager::class.java)
+        createChannels(notifications)
+        val open = PendingIntent.getActivity(
+            this,
+            1,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val builder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, SEARCHING_CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(this))
+            .setContentTitle("Finding the song… ${seconds}s")
+            .setContentText(if (provider.isBlank()) "Asking who knows it" else "Asking $provider")
+            .setSmallIcon(android.R.drawable.ic_menu_search)
+            .setProgress(0, 0, true)
+            .setContentIntent(open)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+        runCatching { notifications.notify(FOUND_NOTIFICATION, builder.build()) }
+    }
+
+    private fun createChannels(notifications: NotificationManager) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        notifications.createNotificationChannel(
+            NotificationChannel(FOUND_CHANNEL, "Song found", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Whether the song was found, when a search ends."
+            },
+        )
+        notifications.createNotificationChannel(
+            NotificationChannel(SEARCHING_CHANNEL, "Searching", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "While Song Find asks who knows the song, with how long it has been."
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            },
+        )
+    }
+
     /** How a search went, with the cover where there is one; tapping it brings Song Find back. */
     private fun notifyFound(title: String, body: String, cover: String?) {
         Thread {
             val picture = cover?.takeIf { it.startsWith("https://") }?.let(::fetchPicture)
             main.post {
                 val notifications = getSystemService(NotificationManager::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    notifications.createNotificationChannel(
-                        NotificationChannel(FOUND_CHANNEL, "Song found", NotificationManager.IMPORTANCE_HIGH).apply {
-                            description = "When a search ends while Song Find is not on screen."
-                        },
-                    )
-                }
+                createChannels(notifications)
                 val open = PendingIntent.getActivity(
                     this,
                     1,
@@ -251,6 +300,7 @@ class MainActivity : FlutterActivity() {
         private const val REQUEST_MICROPHONE = 4101
         private const val REQUEST_CAPTURE = 4102
         private const val FOUND_CHANNEL = "found"
+        private const val SEARCHING_CHANNEL = "searching"
         private const val FOUND_NOTIFICATION = 28
     }
 }

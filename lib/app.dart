@@ -629,10 +629,23 @@ class SettingsPage extends StatelessWidget {
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Tell me when the song is found'),
-            subtitle: const Text('A notification, if Song Find is not on screen when the search ends'),
+            title: const Text('Notifications'),
+            subtitle: const Text('How many seconds the search has gone on, and whether the song was found'),
             value: s.notifyWhenDone,
             onChanged: (v) => finder.change(s.copyWith(notifyWhenDone: v)),
+          ),
+          // Android's own switch outranks this one: when it is off, nothing above can be shown, so it says so.
+          FutureBuilder<bool>(
+            future: finder.phone.notificationsAllowed(),
+            builder: (context, allowed) => allowed.data == false && s.notifyWhenDone
+                ? ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.notifications_off_outlined),
+                    title: const Text('Android has notifications off for Song Find'),
+                    subtitle: const Text('Turn them on to see the countdown and whether the song was found'),
+                    trailing: TextButton(onPressed: finder.phone.openNotificationSettings, child: const Text('Turn on')),
+                  )
+                : const SizedBox.shrink(),
           ),
         ]),
         _section('Providers', [

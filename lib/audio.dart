@@ -20,6 +20,15 @@ abstract class Phone {
   /// A notification saying how a search went, which opens Song Find when tapped; [cover] is a picture's
   /// address to show with it.
   Future<void> notify(String title, String body, {String? cover});
+
+  /// While the providers are asked: which one, and for how many seconds the search has gone on.
+  Future<void> searching(String provider, int seconds);
+
+  /// Whether Android lets Song Find show notifications at all.
+  Future<bool> notificationsAllowed();
+
+  /// Android's page of Song Find's notifications, to allow them.
+  Future<void> openNotificationSettings();
 }
 
 class AndroidPhone implements Phone {
@@ -66,6 +75,16 @@ class AndroidPhone implements Phone {
   @override
   Future<void> notify(String title, String body, {String? cover}) =>
       _channel.invokeMethod('notify', {'title': title, 'body': body, 'cover': cover});
+
+  @override
+  Future<void> searching(String provider, int seconds) =>
+      _channel.invokeMethod('searching', {'provider': provider, 'seconds': seconds});
+
+  @override
+  Future<bool> notificationsAllowed() async => await _channel.invokeMethod<bool>('notificationsAllowed') ?? true;
+
+  @override
+  Future<void> openNotificationSettings() => _channel.invokeMethod('openNotificationSettings');
 }
 
 class ListenError implements Exception {

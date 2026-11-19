@@ -52,6 +52,19 @@ class FakePhone implements Phone {
   @override
   Future<void> notify(String title, String body, {String? cover}) async => told.add((title, body));
 
+  final searched = <(String, int)>[];
+
+  @override
+  Future<void> searching(String provider, int seconds) async => searched.add((provider, seconds));
+
+  bool allowed = true;
+
+  @override
+  Future<bool> notificationsAllowed() async => allowed;
+
+  @override
+  Future<void> openNotificationSettings() async {}
+
   @override
   Future<String?> install(String path) async {
     installed = path;

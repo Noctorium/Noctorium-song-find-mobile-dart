@@ -46,20 +46,24 @@ void main() {
     expect(f.history, isEmpty);
   });
 
-  test('a search that ends out of sight says so in a notification, and only then', () async {
+  test('a search says how it went in a notification, on screen or not, and counts its seconds', () async {
     final phone = FakePhone();
     final f = await songFinder(phone: phone);
     await f.listen();
-    expect(phone.told, isEmpty, reason: 'on screen, the Listen page says it');
+    expect(phone.told.single.$1, 'Never Gonna Give You Up', reason: 'on screen too: it used to say nothing there');
+    expect(phone.told.single.$2, contains('Rick Astley'));
+    expect(phone.searched, isNotEmpty, reason: 'which provider is asked, while it is');
+    expect(phone.searched.first.$2, greaterThanOrEqualTo(f.settings.seconds), reason: 'the seconds include the listening');
 
     f.away = true;
     await f.listen();
-    expect(phone.told.single.$1, 'Never Gonna Give You Up');
-    expect(phone.told.single.$2, contains('Rick Astley'));
+    expect(phone.told, hasLength(2));
 
     f.change(f.settings.copyWith(notifyWhenDone: false));
+    final asked = phone.searched.length;
     await f.listen();
-    expect(phone.told, hasLength(1), reason: 'switched off in Settings');
+    expect(phone.told, hasLength(2), reason: 'switched off in Settings');
+    expect(phone.searched, hasLength(asked), reason: 'no counting either');
   });
 
   test('a new search does not leave the last song beside its problem', () async {

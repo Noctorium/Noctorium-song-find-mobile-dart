@@ -2,6 +2,7 @@
 /// history, the settings, and updating. The screens only draw this and call it.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -109,10 +110,10 @@ class SongFinder extends ChangeNotifier {
     }
   }
 
-  /// When the search ends out of sight -- the song playing in another app, say -- a notification says how it
-  /// went, and tapping it comes back here.
+  /// When the search ends, a notification says how it went -- found, or not -- and tapping it comes back here. It
+  /// used to say so only when Song Find was not on screen, which on screen read as no notification at all.
   Future<void> _tellIfAway() async {
-    if (!away || !settings.notifyWhenDone) return;
+    if (!settings.notifyWhenDone) return;
     final song = shown;
     try {
       if (song != null && problem == null) {
@@ -127,11 +128,25 @@ class SongFinder extends ChangeNotifier {
 
   Future<void> identify(Clip clip, String source) async {
     activity = Activity.asking;
+    final started = DateTime.now();
     for (final provider in settings.inOrder) {
       if (settings.keys.missing(provider) != null) continue;
       asking = provider;
       notifyListeners();
-      final answer = await providers.ask(provider, clip, settings.keys);
+      // Which provider is asked, and how long the search has gone on, in a notification counting the seconds.
+      Timer? ticking;
+      void tell() {
+        if (!settings.notifyWhenDone) return;
+        phone.searching(provider.label, settings.seconds + DateTime.now().difference(started).inSeconds).catchError((_) {});
+      }
+      tell();
+      ticking = Timer.periodic(const Duration(seconds: 1), (_) => tell());
+      final Answer answer;
+      try {
+        answer = await providers.ask(provider, clip, settings.keys);
+      } finally {
+        ticking.cancel();
+      }
       answers = [...answers, (provider, answer)];
       notifyListeners();
       if (answer is Found && !settings.askEveryone) break;
