@@ -809,7 +809,7 @@ class SettingsPage extends StatelessWidget {
                 onPressed: () => open('https://github.com/Noctorium/Noctorium-song-find-mobile-dart'),
                 child: const Text('Source'),
               ),
-              TextButton(onPressed: () => open('https://noctorium.vercel.app'), child: const Text('Website')),
+              TextButton(onPressed: () => open('https://noctorium.xyz'), child: const Text('Website')),
             ],
           ),
         ]),
